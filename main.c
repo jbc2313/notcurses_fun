@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <unistd.h>
 
 static struct ncselector_item item_list[] = {
 	#define SITEM(s,l){s,l,}
@@ -13,7 +13,7 @@ static struct ncselector_item item_list[] = {
 	#undef SITEM
 };
 
-static void selector_func(struct notcurses *nc, struct ncselector *select)
+static void selector_func(struct notcurses *nc, struct ncselector *select, char* user_choice)
 {
 	static int item = 0;
 	++item;
@@ -25,13 +25,18 @@ static void selector_func(struct notcurses *nc, struct ncselector *select)
 	notcurses_render(nc);
 	uint32_t keyinput;
 	ncinput ncinput;
+	const char *tmp;
 	while((keyinput = notcurses_get_blocking(nc, &ncinput)) != (uint32_t)-1){
 		if(!ncselector_offer_input(select, &ncinput)){
 			if(ncinput.evtype == NCTYPE_RELEASE){
 				continue;
 			}
 			switch(keyinput){
-				case NCKEY_ENTER: ncselector_destroy(select, NULL); return;
+				case NCKEY_ENTER:
+					tmp = ncselector_selected(select);
+					strcpy(user_choice,tmp);
+					ncselector_destroy(select, NULL); 
+					return;
 				case 'M':
 				case 'J':
 					if(ncinput_ctrl_p(&ncinput)){
@@ -70,14 +75,14 @@ int main(void)
 	opts.footer="Press 'q' to exit";
 	opts.defidx=1;
 	opts.boxchannels = NCCHANNELS_INITIALIZER(0x20, 0xe0, 0x40, 0x20, 0x20, 0x20);
-    opts.opchannels = NCCHANNELS_INITIALIZER(0xe0, 0x80, 0x40, 0, 0, 0);
-    opts.descchannels = NCCHANNELS_INITIALIZER(0x80, 0xe0, 0x40, 0, 0, 0);
-    opts.footchannels = NCCHANNELS_INITIALIZER(0xe0, 0, 0x40, 0x20, 0, 0);
-    opts.titlechannels = NCCHANNELS_INITIALIZER(0xff, 0xff, 0x80, 0, 0, 0x20);
-    uint64_t bgchannels = NCCHANNELS_INITIALIZER(0, 0x20, 0, 0, 0x20, 0);
-    ncchannels_set_fg_alpha(&bgchannels, NCALPHA_BLEND);
-    ncchannels_set_bg_alpha(&bgchannels, NCALPHA_BLEND);
-    struct ncplane* n = notcurses_stdplane(nc);
+        opts.opchannels = NCCHANNELS_INITIALIZER(0xe0, 0x80, 0x40, 0, 0, 0);
+        opts.descchannels = NCCHANNELS_INITIALIZER(0x80, 0xe0, 0x40, 0, 0, 0);
+        opts.footchannels = NCCHANNELS_INITIALIZER(0xe0, 0, 0x40, 0x20, 0, 0);
+        opts.titlechannels = NCCHANNELS_INITIALIZER(0xff, 0xff, 0x80, 0, 0, 0x20);
+        uint64_t bgchannels = NCCHANNELS_INITIALIZER(0, 0x20, 0, 0, 0x20, 0);
+        ncchannels_set_fg_alpha(&bgchannels, NCALPHA_BLEND);
+        ncchannels_set_bg_alpha(&bgchannels, NCALPHA_BLEND);
+        struct ncplane* n = notcurses_stdplane(nc);
 
 /*
  *  FOR IMAGES
@@ -110,11 +115,35 @@ int main(void)
 		.flags = 0,
 	};
 
+	struct ncplane_options nplanechoiceopts = {
+		.y = 15,
+		.x = 15,
+		.rows = 10, //was 1
+		.cols = 20, //was 1
+		.userptr = NULL,
+		.name = NULL,
+		.resizecb = NULL,
+		.flags = 0,
+	};
 
 	struct ncplane *plane1 = ncplane_create(n, &nplaneopts);
 	ncplane_set_base(plane1, "", 0, bgchannels);
 	struct ncselector *list = ncselector_create(plane1, &opts);
-	selector_func(nc, list);
+	// create variable to get users choice from selector_func
+	const char *choice;
+	char *tmp1 = malloc(sizeof(char)*10);
+	selector_func(nc, list, tmp1);
+	// output user choice to new ncplane and wait 10 sec and die
+	struct ncplane *plane2 = ncplane_create(n, &nplanechoiceopts);
+	ncplane_set_base(plane2, "", 0, bgchannels);
+	//ncplane_putchar_yx(plane2, 2, 2, 'F');
+	//const char *x = "Welcome to the show";
+	choice = tmp1;
+	ncplane_putstr(plane2, choice);	
+	notcurses_render(nc);	
+	sleep(2);
+
+
 
 	if(notcurses_stop(nc))
 		return EXIT_FAILURE;
