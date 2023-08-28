@@ -45,7 +45,11 @@ static void selector_func(struct notcurses *nc, struct ncselector *select, char*
 					};
 			};
 			if(keyinput == 'q')
+			{
+				char *quit="you quit";
+				strcpy(user_choice, quit);
 				break;
+			}
 		}
 		notcurses_render(nc);
 	}
